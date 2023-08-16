@@ -2,12 +2,12 @@ package checksum
 
 import (
 	// #nosec G505
-	"crypto/sha1"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 
+	"github.com/zeebo/blake3"
 	"github.com/lets-cli/lets/set"
 	"github.com/lets-cli/lets/util"
 )
@@ -47,9 +47,9 @@ func readFilesFromPatterns(workDir string, patterns []string) ([]string, error) 
 	return files, nil
 }
 
-// CalculateChecksum calculates sha1 hash from files content and return hex digest
-// It calculates sha1 for each file, cache checksum for each file.
-// Resulting checksum is sha1 from all files sha1's.
+// CalculateChecksum calculates blake3 hash from files content and return hex digest
+// It calculates blake3 for each file, cache checksum for each file.
+// Resulting checksum is blake3 from all files blake3's.
 func CalculateChecksum(workDir string, patterns []string) (string, error) {
 	// read filenames from patterns
 	files, err := readFilesFromPatterns(workDir, patterns)
@@ -57,8 +57,8 @@ func CalculateChecksum(workDir string, patterns []string) (string, error) {
 		return "", err
 	}
 
-	hasher := sha1.New()     // #nosec G401
-	fileHasher := sha1.New() // #nosec G401
+	hasher := blake3.New()     // #nosec G401
+	fileHasher := blake3.New() // #nosec G401
 
 	for _, filename := range files {
 		if cachedSum, found := checksumCache[filename]; found {
@@ -116,7 +116,7 @@ func CalculateChecksumFromSources(workDir string, checksumSources map[string][]s
 	}
 
 	// if checksum is a map of key: patterns
-	hasher := sha1.New() // #nosec G401
+	hasher := blake3.New() // #nosec G401
 
 	keys := getChecksumsKeys(checksumSources)
 	// sort keys to make checksum deterministic
