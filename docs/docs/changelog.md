@@ -17,6 +17,7 @@ title: Changelog
 * `[Refactoring]` Use Go 1.26 `errors.AsType` for type-safe error unwrapping.
 * `[Testing]` Add golden-file tests for help and error rendering in `internal/cmd`, replacing bats format checks with snapshot comparisons.
 * `[Added]` Add a `theme` user setting with `default`, `ansi`, and `synthwave` themes for lets help and styled error output.
+* `[Fixed]` zsh completion now handles root flags before command names, including `-c/--config`, and no longer emits `command -c not declared in config` while completing commands.
 
 ## [0.0.61](https://github.com/lets-cli/lets/releases/tag/v0.0.61)
 
