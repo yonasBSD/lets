@@ -18,9 +18,17 @@ const zshCompletionText = `#compdef lets
 LETS_EXECUTABLE=lets
 
 function _lets {
-    local state
+	local state
 
 	_arguments -C -s \
+		"(-c --config)"{-c,--config}"[config file (default is lets.yaml)]:config file:_files" \
+		"(-E --env)"{-E,--env}"[set env variable KEY=VALUE]:env var:" \
+		"--only[run only specified command(s)]:command:" \
+		"--exclude[run all but excluded command(s)]:command:" \
+		"(-d --debug -dd)"{-d,--debug}"[show debug logs]" \
+		"-dd[show very verbose debug logs]" \
+		"--all[show all commands]" \
+		"--init[create lets.yaml in current folder]" \
 		"1: :->cmds" \
 		'*::arg:->args'
 
@@ -29,22 +37,131 @@ function _lets {
 			_lets_commands
 			;;
 		args)
-			_lets_command_options "${words[1]}"
+			local cmd=$(_lets_active_command)
+			_lets_command_options "${cmd}"
 			;;
 	esac
 }
 
-# Check if in folder with correct lets.yaml file
+_lets_root_token_kind() {
+	case "$1" in
+		-c|--config|-E|--env|--only|--exclude)
+			echo value
+			;;
+		--config=*|--env=*|--only=*|--exclude=*|-E*)
+			echo flag
+			;;
+		-d|-dd|--debug|--all|--init)
+			echo flag
+			;;
+		--)
+			echo stop
+			;;
+		-*)
+			echo other_flag
+			;;
+		*)
+			echo command
+			;;
+	esac
+}
+
+# Accepts only root flags collected before a command, so config probes cannot
+# accidentally execute or validate a command token.
 _check_lets_config() {
-	${LETS_EXECUTABLE} 1>/dev/null 2>/dev/null
+	local idx=1
+	local -a root_flags=("$@")
+
+	while [ $idx -le ${#root_flags[@]} ]; do
+		local token="${root_flags[$idx]}"
+
+		case "$(_lets_root_token_kind "$token")" in
+			value)
+				((idx++))
+				if [ $idx -gt ${#root_flags[@]} ]; then
+					echo 1
+					return
+				fi
+				;;
+			flag)
+				;;
+			*)
+				echo 1
+				return
+				;;
+		esac
+
+		((idx++))
+	done
+
+	${LETS_EXECUTABLE} "${root_flags[@]}" 1>/dev/null 2>/dev/null
 	echo $?
+}
+
+_lets_root_flags_before_command() {
+	local idx=1
+	local -a prefix=()
+
+	while [ $idx -lt $CURRENT ]; do
+		local token="${words[$idx]}"
+
+		case "$(_lets_root_token_kind "$token")" in
+			value)
+				prefix+=("$token")
+				((idx++))
+				if [ $idx -lt $CURRENT ]; then
+					prefix+=("${words[$idx]}")
+				fi
+				;;
+			flag)
+				prefix+=("$token")
+				;;
+			stop|command)
+				break
+				;;
+			other_flag)
+				prefix+=("$token")
+				;;
+		esac
+
+		((idx++))
+	done
+
+	reply=("${prefix[@]}")
+}
+
+_lets_active_command() {
+	local idx=1
+
+	while [ $idx -le $#words ]; do
+		local token="${words[$idx]}"
+
+		case "$(_lets_root_token_kind "$token")" in
+			value)
+				((idx++))
+				;;
+			flag|other_flag)
+				;;
+			stop)
+				break
+				;;
+			command)
+				echo "$token"
+				return
+				;;
+		esac
+
+		((idx++))
+	done
 }
 
 _lets_commands () {
 	local cmds
+	_lets_root_flags_before_command
+	local -a root_flags=("${reply[@]}")
 
-	if [ $(_check_lets_config) -eq 0 ]; then
-		IFS=$'\n' cmds=($(${LETS_EXECUTABLE} completion --commands --verbose))
+	if [ $(_check_lets_config "${root_flags[@]}") -eq 0 ]; then
+		IFS=$'\n' cmds=($(${LETS_EXECUTABLE} "${root_flags[@]}" completion --commands --verbose 2>/dev/null))
 	else
 		cmds=()
 	fi
@@ -53,15 +170,21 @@ _lets_commands () {
 
 _lets_command_options () {
 	local cmd=$1
+	_lets_root_flags_before_command
+	local -a root_flags=("${reply[@]}")
 
-	if [ $(_check_lets_config) -eq 0 ]; then
+	if [[ -z "$cmd" || "$cmd" == -* ]]; then
+		return 0
+	fi
+
+	if [ $(_check_lets_config "${root_flags[@]}") -eq 0 ]; then
 		IFS=$'\n'
-		_arguments -s $(${LETS_EXECUTABLE} completion --options=${cmd} --verbose)
+		_arguments -s $(${LETS_EXECUTABLE} "${root_flags[@]}" completion --options=${cmd} --verbose 2>/dev/null)
 	fi
 }
 
 if ! command -v compinit >/dev/null; then
-    autoload -U compinit && compinit
+	autoload -U compinit && compinit
 fi
 
 compdef _lets lets
