@@ -43,8 +43,58 @@ function _lets {
 	esac
 }
 
+_lets_root_token_kind() {
+	case "$1" in
+		-c|--config|-E|--env|--only|--exclude)
+			echo value
+			;;
+		--config=*|--env=*|--only=*|--exclude=*|-E*)
+			echo flag
+			;;
+		-d|-dd|--debug|--all|--init)
+			echo flag
+			;;
+		--)
+			echo stop
+			;;
+		-*)
+			echo other_flag
+			;;
+		*)
+			echo command
+			;;
+	esac
+}
+
+# Accepts only root flags collected before a command, so config probes cannot
+# accidentally execute or validate a command token.
 _check_lets_config() {
-	${LETS_EXECUTABLE} "$@" 1>/dev/null 2>/dev/null
+	local idx=1
+	local -a root_flags=("$@")
+
+	while [ $idx -le ${#root_flags[@]} ]; do
+		local token="${root_flags[$idx]}"
+
+		case "$(_lets_root_token_kind "$token")" in
+			value)
+				((idx++))
+				if [ $idx -gt ${#root_flags[@]} ]; then
+					echo 1
+					return
+				fi
+				;;
+			flag)
+				;;
+			*)
+				echo 1
+				return
+				;;
+		esac
+
+		((idx++))
+	done
+
+	${LETS_EXECUTABLE} "${root_flags[@]}" 1>/dev/null 2>/dev/null
 	echo $?
 }
 
@@ -55,28 +105,22 @@ _lets_root_flags_before_command() {
 	while [ $idx -lt $CURRENT ]; do
 		local token="${words[$idx]}"
 
-		case "$token" in
-			-c|--config|-E|--env|--only|--exclude)
+		case "$(_lets_root_token_kind "$token")" in
+			value)
 				prefix+=("$token")
 				((idx++))
 				if [ $idx -lt $CURRENT ]; then
 					prefix+=("${words[$idx]}")
 				fi
 				;;
-			--config=*|--env=*|--only=*|--exclude=*|-E*)
+			flag)
 				prefix+=("$token")
 				;;
-			-d|-dd|--debug|--all|--init)
-				prefix+=("$token")
-				;;
-			--)
+			stop|command)
 				break
 				;;
-			-*)
+			other_flag)
 				prefix+=("$token")
-				;;
-			*)
-				break
 				;;
 		esac
 
@@ -92,15 +136,16 @@ _lets_active_command() {
 	while [ $idx -le $#words ]; do
 		local token="${words[$idx]}"
 
-		case "$token" in
-			-c|--config|-E|--env|--only|--exclude)
+		case "$(_lets_root_token_kind "$token")" in
+			value)
 				((idx++))
 				;;
-			--config=*|--env=*|--only=*|--exclude=*|-E*|-d|-dd|--debug|--all|--init|--)
+			flag|other_flag)
 				;;
-			-*)
+			stop)
+				break
 				;;
-			*)
+			command)
 				echo "$token"
 				return
 				;;

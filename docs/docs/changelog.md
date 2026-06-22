@@ -18,6 +18,7 @@ title: Changelog
 * `[Testing]` Add golden-file tests for help and error rendering in `internal/cmd`, replacing bats format checks with snapshot comparisons.
 * `[Added]` Add a `theme` user setting with `default`, `ansi`, and `synthwave` themes for lets help and styled error output.
 * `[Fixed]` zsh completion now handles root flags before command names, including `-c/--config`, and no longer emits `command -c not declared in config` while completing commands.
+* `[Fixed]` zsh completion now treats `--` as the end of root flags and ignores non-flag command tokens when probing config validity.
 
 ## [0.0.61](https://github.com/lets-cli/lets/releases/tag/v0.0.61)
 
